@@ -45,3 +45,19 @@ From inside the unpacked kit:
 ```
 node cli/makefun.mjs grade-local --kit . --bot <abs path to this dir> --driver process
 ```
+
+Verified result, 2026-11-11:
+
+| metric | result |
+|---|---|
+| net PnL | **+$18.13 (+1.81%)** |
+| trades | 10 (5 round trips) |
+| win rate | 80% |
+| max drawdown | 1.58% |
+| rejected orders | 0 |
+| guardrails | met |
+| eligible / ranked | yes |
+
+L1 regrade reproduces byte for byte (deterministic). At 2x fees the net
+PnL is still +$14.08. The local score (+$18.13) matches the offline
+sweep prediction (+$17.87), so the fill model is validated.
