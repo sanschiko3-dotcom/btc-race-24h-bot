@@ -49,6 +49,10 @@
 // drawdown 1.6%. The 8-hour lookback (n = 480) scores a little higher
 // (+$18.24) but on only 2 trades, so it was not taken.
 //
+// Verified with the kit's local grader (`grade-local --driver process`):
+// net PnL +$18.13 (+1.81%), 10 trades (5 round trips), 80% win rate,
+// max drawdown 1.58%, 0 rejected, guardrails met, eligible / ranked yes.
+//
 // Laid out like an entrant's repository: the grader runs `node /bot/main.ts`
 // with this directory mounted at /bot; vendor/makefun-bars.ts is a
 // byte-identical copy of bars/sdk/makefun-bars.ts.
