@@ -29,9 +29,12 @@
 // would pay there; max_slippage_bps bounds the move from the latest close, the slippage and the
 // impact together. A sell's proceeds never fund a buy of the same reply; the last bar's orders are
 // rejected (after_end) and every position is flattened at the end, at its latest close against that
-// close's depth. stdout carries replies only (diagnostics: console.error). Every entry runs twice
-// and the two action logs must match byte for byte: never read the clock, the environment or
-// Math.random; seed any randomness from state.hello.seed.
+// close's depth. A contest may open with a warm-up (hello.warmup_bars): its first batches are the bars
+// before the scored window, to build history from, and every order decided on one is rejected
+// (warmup); state.warmingUp says so, state.warmupBars counts them (0 without one), and seq
+// state.warmupBars is the first batch you can trade on. stdout carries replies only (diagnostics:
+// console.error). Every entry runs twice and the two action logs must match byte for byte: never read
+// the clock, the environment or Math.random; seed any randomness from state.hello.seed.
 
 import { createInterface } from 'node:readline';
 
@@ -59,6 +62,8 @@ export interface Fees { fee_bps: number; slippage_bps: number; min_notional_quot
 export interface Hello {
   type: 'hello'; protocol: typeof PROTOCOL; seed: U64; symbols: HelloSymbol[]; capital: Capital;
   bar_interval: '1m' | '1h' | '1d'; first_close_ms: number; caps: Caps; fees: Fees; latency_bars: 1;
+  /** Warm-up batches (seq 0 to warmup_bars - 1, trading closed) before the scored window; absent when there are none. */
+  warmup_bars?: number;
 }
 /**
  * One symbol's bar closing at t (ms); prices at its price_scale, v at its qty_scale or null; the pool
@@ -70,7 +75,7 @@ export interface Position { symbol: string; qty: U64; cost_quote_units: U64 }
 export interface Account { cash_quote_units: U64; positions: Position[]; equity_quote_units: U64 }
 export const REJECT_REASONS = [
   'max_open_positions', 'max_orders_per_bar', 'max_weight', 'insufficient_cash', 'insufficient_position', 'not_in_universe',
-  'no_bar', 'zero_amount', 'duplicate_client_id', 'below_min_notional', 'max_slippage', 'after_end',
+  'no_bar', 'zero_amount', 'duplicate_client_id', 'below_min_notional', 'max_slippage', 'after_end', 'warmup',
 ] as const;
 export type RejectReason = (typeof REJECT_REASONS)[number];
 export interface Fill {
@@ -122,14 +127,22 @@ export class BarsState {
   /** Each symbol's latest bar, however many bars back; absent until its first. */
   readonly latest = new Map<string, Bar>();
   readonly symbols = new Map<string, HelloSymbol>();
+  /** The warm-up batches before the scored window (hello.warmup_bars), 0 without a warm-up. */
+  readonly warmupBars: number;
   #used = new Set<string>();
   #next = 1;
 
   constructor(hello: Hello) {
     this.hello = hello;
+    this.warmupBars = hello.warmup_bars ?? 0;
     this.cash = this.equity = BigInt(hello.capital.quote_units);
     this.account = { cash_quote_units: hello.capital.quote_units, positions: [], equity_quote_units: hello.capital.quote_units };
     for (const s of hello.symbols) this.symbols.set(s.symbol, s);
+  }
+
+  /** True while the batch being answered is a warm-up batch (seq < warmupBars): any order decided on it is rejected (warmup). Always false without a warm-up. */
+  get warmingUp(): boolean {
+    return this.warmupBars > 0 && this.seq < this.warmupBars;
   }
 
   /** The symbol's latest close, or null before its first bar (a buy then is rejected no_bar). */
